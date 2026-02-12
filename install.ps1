@@ -73,7 +73,7 @@ foreach ($script in $scripts) {
 $prefix = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File"
 
 function Get-HookCommand($scriptName) {
-    $path = (Join-Path $hooksDir $scriptName) -replace '\\', '\\'
+    $path = Join-Path $hooksDir $scriptName
     return "$prefix $path"
 }
 
@@ -106,6 +106,8 @@ $hooksConfig = @{
 
 # 6. Merge into existing settings.json or create new one
 $settingsPath = Join-Path $claudeDir "settings.json"
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+
 if (Test-Path $settingsPath) {
     $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
     Write-Host "[OK] Read existing settings.json" -ForegroundColor Green
@@ -114,18 +116,28 @@ if (Test-Path $settingsPath) {
     Write-Host "[OK] Creating new settings.json" -ForegroundColor Green
 }
 
-# Convert to hashtable for easier manipulation
-$settingsHash = @{}
-$settings.PSObject.Properties | ForEach-Object {
-    $settingsHash[$_.Name] = $_.Value
+# Replace hooks on the PSCustomObject directly (preserves key order from original file)
+if ($settings.PSObject.Properties['hooks']) {
+    $settings.hooks = $hooksConfig
+} else {
+    $settings | Add-Member -NotePropertyName 'hooks' -NotePropertyValue $hooksConfig
 }
 
-# Replace hooks config
-$settingsHash["hooks"] = $hooksConfig
+# Serialize and reformat (PS 5.1's ConvertTo-Json uses inconsistent indentation)
+$json = $settings | ConvertTo-Json -Depth 10
+$level = 0
+$formatted = @()
+foreach ($line in ($json -split "`n")) {
+    $trimmed = $line.Trim()
+    if (-not $trimmed) { continue }
+    $trimmed = $trimmed -replace ':\s{2,}', ': '
+    if ($trimmed -match '^[\}\]]') { $level = [Math]::Max(0, $level - 1) }
+    $formatted += ('  ' * $level) + $trimmed
+    if ($trimmed -match '[\{\[]\s*$') { $level++ }
+}
+$json = $formatted -join "`n"
 
-# Write back
-$json = $settingsHash | ConvertTo-Json -Depth 10
-[System.IO.File]::WriteAllText($settingsPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText($settingsPath, $json, $utf8)
 Write-Host "[OK] Updated settings.json with hooks config" -ForegroundColor Green
 
 Write-Host "`n=== Installation complete ===" -ForegroundColor Cyan
