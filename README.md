@@ -15,7 +15,7 @@ Portable hooks for [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 ## Quick install
 
 ```powershell
-git clone <your-repo-url> claude-hooks
+git clone https://github.com/Valiice/claude-hooks.git
 cd claude-hooks
 .\install.ps1
 ```
@@ -62,6 +62,15 @@ Set it permanently:
 | `notify_notification.ps1` | Notification | Plays a sound and shows a balloon when Claude needs attention |
 | `notify_done.ps1` | (spare) | Minimal balloon notification for task completion |
 | `notify_question.ps1` | (spare) | Plays a system sound |
+
+## Obsidian CSS snippet
+
+`claude-sessions.css` styles the custom callouts (`[!user]`, `[!claude]`, `[!plan]`) used in the session notes. To install:
+
+1. Copy `claude-sessions.css` to your vault's `.obsidian/snippets/` folder
+2. In Obsidian, go to **Settings > Appearance > CSS snippets** and enable `claude-sessions`
+
+The installer does this automatically if you provide your vault path.
 
 ## Plugins
 

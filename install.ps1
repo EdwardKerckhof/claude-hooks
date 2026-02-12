@@ -140,6 +140,28 @@ $json = $formatted -join "`n"
 [System.IO.File]::WriteAllText($settingsPath, $json, $utf8)
 Write-Host "[OK] Updated settings.json with hooks config" -ForegroundColor Green
 
+# 7. Install Obsidian CSS snippet
+$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$cssSource = Join-Path $repoRoot "claude-sessions.css"
+if (Test-Path $cssSource) {
+    # Walk up from vault path to find .obsidian/snippets/
+    $vaultRoot = $VaultPath
+    while ($vaultRoot -and -not (Test-Path (Join-Path $vaultRoot ".obsidian"))) {
+        $vaultRoot = Split-Path $vaultRoot -Parent
+    }
+    if ($vaultRoot) {
+        $snippetsDir = Join-Path $vaultRoot ".obsidian\snippets"
+        if (-not (Test-Path $snippetsDir)) {
+            New-Item -ItemType Directory -Path $snippetsDir -Force | Out-Null
+        }
+        Copy-Item -Path $cssSource -Destination (Join-Path $snippetsDir "claude-sessions.css") -Force
+        Write-Host "[OK] Installed claude-sessions.css to Obsidian snippets" -ForegroundColor Green
+        Write-Host "     Enable it in Obsidian: Settings > Appearance > CSS snippets" -ForegroundColor Gray
+    } else {
+        Write-Host "[SKIP] Could not find .obsidian folder — copy claude-sessions.css manually" -ForegroundColor Yellow
+    }
+}
+
 Write-Host "`n=== Installation complete ===" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Hooks installed to: $hooksDir" -ForegroundColor White
