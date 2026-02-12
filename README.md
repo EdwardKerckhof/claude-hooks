@@ -24,21 +24,21 @@ The installer will:
 
 1. Ask for your Obsidian vault path (or accept the default)
 2. Set the `CLAUDE_VAULT` environment variable
-3. Copy hook scripts to `~/.claude/`
+3. Copy hook scripts to `~/.claude/hooks/`
 4. Merge hooks config into `~/.claude/settings.json` (existing settings like `model`, `env`, `enabledPlugins` are preserved)
 
 ## Manual install
 
 If you prefer not to run the installer:
 
-1. Copy all `.ps1` files to `%USERPROFILE%\.claude\`
+1. Copy the `hooks\` folder to `%USERPROFILE%\.claude\hooks\`
 2. Set the `CLAUDE_VAULT` user environment variable to your Obsidian vault path:
    ```powershell
    [Environment]::SetEnvironmentVariable("CLAUDE_VAULT", "C:\path\to\your\vault", "User")
    ```
 3. Add the hooks config to `~/.claude/settings.json` — see `install.ps1` for the exact structure. All hook commands follow this pattern:
    ```
-   powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\Users\<you>\.claude\<script>.ps1
+   powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\Users\<you>\.claude\hooks\<script>.ps1
    ```
 
 ## Configuration

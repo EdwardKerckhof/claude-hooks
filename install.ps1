@@ -5,7 +5,7 @@
 .DESCRIPTION
     - Prompts for the Obsidian vault path
     - Sets CLAUDE_VAULT as a user-level environment variable
-    - Copies hook scripts to ~/.claude/
+    - Copies hook scripts to ~/.claude/hooks/
     - Merges hooks config into ~/.claude/settings.json (preserving existing settings)
 #>
 
@@ -39,15 +39,16 @@ if (-not (Test-Path $VaultPath)) {
 $env:CLAUDE_VAULT = $VaultPath
 Write-Host "[OK] Set CLAUDE_VAULT = $VaultPath" -ForegroundColor Green
 
-# 3. Ensure ~/.claude/ exists
+# 3. Ensure ~/.claude/hooks/ exists
 $claudeDir = Join-Path $env:USERPROFILE ".claude"
-if (-not (Test-Path $claudeDir)) {
-    New-Item -ItemType Directory -Path $claudeDir -Force | Out-Null
-    Write-Host "[OK] Created $claudeDir" -ForegroundColor Green
+$hooksDir = Join-Path $claudeDir "hooks"
+if (-not (Test-Path $hooksDir)) {
+    New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null
+    Write-Host "[OK] Created $hooksDir" -ForegroundColor Green
 }
 
-# 4. Copy hook scripts
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# 4. Copy hook scripts from repo's hooks/ folder
+$scriptDir = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "hooks"
 $scripts = @(
     "log_prompt.ps1",
     "log_response.ps1",
@@ -59,7 +60,7 @@ $scripts = @(
 
 foreach ($script in $scripts) {
     $src = Join-Path $scriptDir $script
-    $dst = Join-Path $claudeDir $script
+    $dst = Join-Path $hooksDir $script
     if (Test-Path $src) {
         Copy-Item -Path $src -Destination $dst -Force
         Write-Host "[OK] Copied $script" -ForegroundColor Green
@@ -69,12 +70,10 @@ foreach ($script in $scripts) {
 }
 
 # 5. Build hooks config with absolute paths for this machine
-$psExe = "powershell.exe"
-$prefix = "$psExe -ExecutionPolicy Bypass -WindowStyle Hidden -File"
-$escapedDir = $claudeDir -replace '\\', '\\'
+$prefix = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File"
 
 function Get-HookCommand($scriptName) {
-    $path = (Join-Path $claudeDir $scriptName) -replace '\\', '\\'
+    $path = (Join-Path $hooksDir $scriptName) -replace '\\', '\\'
     return "$prefix $path"
 }
 
@@ -131,7 +130,7 @@ Write-Host "[OK] Updated settings.json with hooks config" -ForegroundColor Green
 
 Write-Host "`n=== Installation complete ===" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Hooks installed to: $claudeDir" -ForegroundColor White
+Write-Host "Hooks installed to: $hooksDir" -ForegroundColor White
 Write-Host "Vault path:         $VaultPath" -ForegroundColor White
 Write-Host ""
 Write-Host "Start a new Claude Code session to activate the hooks." -ForegroundColor White
