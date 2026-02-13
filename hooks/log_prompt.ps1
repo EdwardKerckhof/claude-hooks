@@ -1,5 +1,75 @@
+function Format-CalloutContent([string]$text) {
+    $bt = [char]96  # backtick character
+    $fence = "$bt$bt$bt"
+    $lines = $text -split "`n"
+    $output = @()
+    $inFence = $false
+    $pendingCode = $null  # $null = not collecting; @() = collecting
+
+    foreach ($line in $lines) {
+        # Track triple-backtick fenced blocks
+        if ($line.StartsWith($fence)) {
+            if ($pendingCode -ne $null) {
+                # Flush pending single-backtick content as fenced block
+                $output += "> $fence"
+                foreach ($cl in $pendingCode) { $output += "> $cl" }
+                $output += "> $fence"
+                $pendingCode = $null
+            }
+            $inFence = -not $inFence
+            $output += "> $line"
+            continue
+        }
+
+        if ($inFence) {
+            $output += "> $line"
+            continue
+        }
+
+        if ($pendingCode -ne $null) {
+            # Collecting lines after an unmatched opening backtick
+            if ($line.Contains($bt)) {
+                # Closing backtick found - emit as fenced block
+                $closingLine = $line.Replace([string]$bt, '')
+                $pendingCode += $closingLine
+                $output += "> $fence"
+                foreach ($cl in $pendingCode) { $output += "> $cl" }
+                $output += "> $fence"
+                $pendingCode = $null
+            } else {
+                $pendingCode += $line
+            }
+            continue
+        }
+
+        # Count backticks on this line
+        $btCount = ($line.ToCharArray() | Where-Object { $_ -eq $bt }).Count
+        if ($btCount -gt 0 -and $btCount % 2 -ne 0) {
+            # Odd number of backticks - opening without close on same line
+            $openLine = $line.Replace([string]$bt, '')
+            $pendingCode = @($openLine)
+            continue
+        }
+
+        # Normal line (no unmatched backticks, or matched inline backticks)
+        $output += "> $line"
+    }
+
+    # Flush any remaining pending code
+    if ($pendingCode -ne $null) {
+        $output += "> $fence"
+        foreach ($cl in $pendingCode) { $output += "> $cl" }
+        $output += "> $fence"
+    }
+
+    return ($output -join "`n")
+}
+
 try {
-    $rawInput = [Console]::In.ReadToEnd()
+    $stdinStream = [Console]::OpenStandardInput()
+    $reader = New-Object System.IO.StreamReader($stdinStream, [System.Text.Encoding]::UTF8)
+    $rawInput = $reader.ReadToEnd()
+    $reader.Close()
     $json = $rawInput | ConvertFrom-Json
     $sessionId = $json.session_id
     $cwd = $json.cwd
@@ -27,7 +97,9 @@ try {
         $prompt = $prompt.Substring(0, 5000) + "`n`n... (truncated, $($prompt.Length) chars total)"
     }
 
-    $vaultDir = if ($env:CLAUDE_VAULT) { $env:CLAUDE_VAULT } else { "C:\Obsidian\Personal\Work\Claude" }
+    $vaultDir = if ($env:CLAUDE_VAULT) { $env:CLAUDE_VAULT }
+               elseif ([Environment]::GetEnvironmentVariable("CLAUDE_VAULT", "User")) { [Environment]::GetEnvironmentVariable("CLAUDE_VAULT", "User") }
+               else { "C:\Obsidian\Personal\Work\Claude" }
     $claudeProjects = Join-Path $env:USERPROFILE ".claude\projects"
     if (-not (Test-Path $vaultDir)) {
         New-Item -ItemType Directory -Path $vaultDir -Force | Out-Null
@@ -137,13 +209,14 @@ try {
     }
 
     # Format prompt as Obsidian callout (expanded by default)
-    $promptLines = $prompt -replace "`n", "`n> "
+    $bt = [char]96
+    $promptLines = Format-CalloutContent $prompt
     $entry = @"
 
 > [!user]+ #$promptNum - You ($time)
-> **cwd**: ``$cwd``
+> **cwd**: $bt$bt$cwd$bt$bt
 >
-> $promptLines
+$promptLines
 
 ---
 

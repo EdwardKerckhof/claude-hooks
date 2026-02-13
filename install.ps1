@@ -158,7 +158,7 @@ if (Test-Path $cssSource) {
         Write-Host "[OK] Installed claude-sessions.css to Obsidian snippets" -ForegroundColor Green
         Write-Host "     Enable it in Obsidian: Settings > Appearance > CSS snippets" -ForegroundColor Gray
     } else {
-        Write-Host "[SKIP] Could not find .obsidian folder — copy claude-sessions.css manually" -ForegroundColor Yellow
+        Write-Host "[SKIP] Could not find .obsidian folder - copy claude-sessions.css manually" -ForegroundColor Yellow
     }
 }
 
