@@ -1,0 +1,34 @@
+package main
+
+import (
+	"os"
+
+	"github.com/gen2brain/beeep"
+)
+
+func main() {
+	defer func() {
+		recover() // Never block Claude - swallow all panics
+	}()
+
+	title := "Claude"
+	message := "Task completed!"
+
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--title":
+			if i+1 < len(args) {
+				title = args[i+1]
+				i++
+			}
+		case "--message":
+			if i+1 < len(args) {
+				message = args[i+1]
+				i++
+			}
+		}
+	}
+
+	beeep.Alert(title, message, "")
+}

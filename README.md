@@ -9,7 +9,6 @@ Portable hooks for [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 
 - Windows 10/11
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
-- PowerShell 5.1+
 - [Obsidian](https://obsidian.md/) (for the logging hooks)
 
 ## Quick install
@@ -24,25 +23,59 @@ The installer will:
 
 1. Ask for your Obsidian vault path (the folder where session logs will be written)
 2. Set the `CLAUDE_VAULT` environment variable (user-level, persistent)
-3. Copy hook scripts to `~/.claude/hooks/`
+3. Copy pre-built Go binaries (`claude-notify.exe`, `claude-obsidian.exe`) to `~/.claude/hooks/`
 4. Copy skills to `~/.claude/skills/`
 5. Install `claude-sessions.css` to your Obsidian vault's snippets folder
 6. Merge hooks config into `~/.claude/settings.json` (existing settings are preserved)
+7. Clean up old `claude-hooks.exe` if present
+
+No Go installation required — the pre-built binaries are included in the repo.
+
+## Install with Claude
+
+You can also ask Claude Code to install the hooks for you. Clone the repo and tell Claude:
+
+> Install the claude-hooks from `C:\path\to\claude-hooks`. Run `install.ps1` with my vault path `C:\path\to\vault\Claude`. Then verify that:
+> - `claude-notify.exe` and `claude-obsidian.exe` were copied to `~/.claude/hooks/`
+> - `settings.json` hooks point to the correct exe paths
+> - The Go binaries do NOT need to be rebuilt — they're pre-built in `go-hooks/bin/`
+> - Start a new session and check that Obsidian session files are being created in the vault
 
 ## Manual install
 
 If you prefer not to run the installer:
 
-1. Copy the `hooks\` folder to `%USERPROFILE%\.claude\hooks\`
+1. Copy `go-hooks\bin\claude-notify.exe` and `go-hooks\bin\claude-obsidian.exe` to `%USERPROFILE%\.claude\hooks\`
 2. Copy the `skills\` folder to `%USERPROFILE%\.claude\skills\`
 3. Copy `claude-sessions.css` to your vault's `.obsidian\snippets\` folder
 4. Set the `CLAUDE_VAULT` user environment variable to your Obsidian vault path:
    ```powershell
    [Environment]::SetEnvironmentVariable("CLAUDE_VAULT", "C:\path\to\your\vault\Claude", "User")
    ```
-5. Add the hooks config to `~/.claude/settings.json` — see `install.ps1` for the exact structure. All hook commands follow this pattern:
-   ```
-   powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\Users\<you>\.claude\hooks\<script>.ps1
+5. Add the hooks config to `~/.claude/settings.json`:
+   ```json
+   {
+     "hooks": {
+       "Stop": [{
+         "matcher": "*",
+         "hooks": [
+           { "type": "command", "command": "C:\\Users\\<you>\\.claude\\hooks\\claude-notify.exe --message \"Waiting for you!\"" },
+           { "type": "command", "command": "C:\\Users\\<you>\\.claude\\hooks\\claude-obsidian.exe log-response" }
+         ]
+       }],
+       "UserPromptSubmit": [{
+         "hooks": [
+           { "type": "command", "command": "C:\\Users\\<you>\\.claude\\hooks\\claude-obsidian.exe log-prompt" }
+         ]
+       }],
+       "Notification": [{
+         "matcher": "*",
+         "hooks": [
+           { "type": "command", "command": "C:\\Users\\<you>\\.claude\\hooks\\claude-notify.exe --message \"Needs your attention!\"" }
+         ]
+       }]
+     }
+   }
    ```
 
 ## Configuration
@@ -56,25 +89,30 @@ Set it permanently:
 [Environment]::SetEnvironmentVariable("CLAUDE_VAULT", "D:\MyVault\Claude", "User")
 ```
 
-## What each hook does
+## Architecture
 
-### Active hooks (wired up by the installer)
+The hooks use two standalone Go binaries with zero shared code:
 
-| Script | Hook event | Description |
-|--------|-----------|-------------|
-| `log_prompt.ps1` | UserPromptSubmit | Logs each user prompt to an Obsidian session note with frontmatter, project folders, and resumed-session linking |
-| `log_response.ps1` | Stop | Extracts the last assistant response from the transcript and appends it to the session note; updates duration and daily index |
-| `notify_stop.ps1` | Stop | Plays a sound and shows a Windows balloon notification when Claude finishes a task |
-| `notify_notification.ps1` | Notification | Plays a sound and shows a balloon when Claude needs your attention |
+| Binary | Purpose | Commands | External Deps |
+|--------|---------|----------|---------------|
+| `claude-notify.exe` | Desktop notifications | `--title`, `--message` flags | `beeep` |
+| `claude-obsidian.exe` | Session logging | `log-prompt`, `log-response` subcommands | None (stdlib only) |
 
-### Spare hooks (included but not wired up)
+Source code is in `go-hooks/cmd/notify/` and `go-hooks/cmd/obsidian/`. Internal packages (`internal/hookdata/`, `internal/obsidian/`, `internal/session/`) are used only by the obsidian binary.
 
-| Script | Description |
-|--------|-------------|
-| `notify_done.ps1` | Minimal balloon notification (no sound) |
-| `notify_question.ps1` | Plays a system sound only (no balloon) |
+### Rebuilding (for contributors)
 
-You can wire these up yourself by adding them to your `~/.claude/settings.json` hooks config.
+If you modify the Go source, rebuild and commit the binaries:
+
+```powershell
+cd go-hooks
+go build -ldflags="-s -w" -o bin/claude-notify.exe ./cmd/notify
+go build -ldflags="-s -w" -o bin/claude-obsidian.exe ./cmd/obsidian
+```
+
+### Legacy PowerShell hooks
+
+The `hooks/` folder contains the original PowerShell implementations. These are kept as reference but are no longer used by the installer. The Go binaries are significantly faster (~5ms startup vs ~500ms for PowerShell).
 
 ## Skills
 

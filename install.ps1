@@ -5,7 +5,7 @@
 .DESCRIPTION
     - Prompts for the Obsidian vault path
     - Sets CLAUDE_VAULT as a user-level environment variable
-    - Copies hook scripts to ~/.claude/hooks/
+    - Copies pre-built Go binaries (claude-notify.exe, claude-obsidian.exe) to ~/.claude/hooks/
     - Copies skills to ~/.claude/skills/
     - Merges hooks config into ~/.claude/settings.json (preserving existing settings)
 #>
@@ -50,30 +50,24 @@ if (-not (Test-Path $hooksDir)) {
     Write-Host "[OK] Created $hooksDir" -ForegroundColor Green
 }
 
-# 4. Copy hook scripts from repo's hooks/ folder
-$scriptDir = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "hooks"
-$scripts = @(
-    "log_prompt.ps1",
-    "log_response.ps1",
-    "notify_stop.ps1",
-    "notify_notification.ps1",
-    "notify_done.ps1",
-    "notify_question.ps1"
-)
+$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$binDir = Join-Path $repoRoot "go-hooks\bin"
 
-foreach ($script in $scripts) {
-    $src = Join-Path $scriptDir $script
-    $dst = Join-Path $hooksDir $script
-    if (Test-Path $src) {
-        Copy-Item -Path $src -Destination $dst -Force
-        Write-Host "[OK] Copied $script" -ForegroundColor Green
-    } else {
-        Write-Host "[SKIP] $script not found in repo" -ForegroundColor Yellow
+# 4. Copy pre-built Go binaries
+$binaries = @("claude-notify.exe", "claude-obsidian.exe")
+foreach ($bin in $binaries) {
+    $src = Join-Path $binDir $bin
+    if (-not (Test-Path $src)) {
+        Write-Host "[ERROR] Pre-built binary not found: $src" -ForegroundColor Red
+        Write-Host "        Run 'go build' in go-hooks/ first, or check that bin/ contains the .exe files." -ForegroundColor Red
+        exit 1
     }
+    Copy-Item -Path $src -Destination (Join-Path $hooksDir $bin) -Force
+    Write-Host "[OK] Installed $bin" -ForegroundColor Green
 }
 
 # 5. Copy skills from repo's skills/ folder
-$repoSkillsDir = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "skills"
+$repoSkillsDir = Join-Path $repoRoot "skills"
 $skillsDir = Join-Path $claudeDir "skills"
 if (Test-Path $repoSkillsDir) {
     $skillFolders = Get-ChildItem -Path $repoSkillsDir -Directory
@@ -91,27 +85,23 @@ if (Test-Path $repoSkillsDir) {
 }
 
 # 6. Build hooks config with absolute paths for this machine
-$prefix = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File"
-
-function Get-HookCommand($scriptName) {
-    $path = Join-Path $hooksDir $scriptName
-    return "$prefix $path"
-}
+$notifyExe = Join-Path $hooksDir "claude-notify.exe"
+$obsidianExe = Join-Path $hooksDir "claude-obsidian.exe"
 
 $hooksConfig = @{
     "Stop" = @(
         @{
             matcher = "*"
             hooks = @(
-                @{ type = "command"; command = (Get-HookCommand "notify_stop.ps1") }
-                @{ type = "command"; command = (Get-HookCommand "log_response.ps1") }
+                @{ type = "command"; command = "$notifyExe --message `"Waiting for you!`"" }
+                @{ type = "command"; command = "$obsidianExe log-response" }
             )
         }
     )
     "UserPromptSubmit" = @(
         @{
             hooks = @(
-                @{ type = "command"; command = (Get-HookCommand "log_prompt.ps1") }
+                @{ type = "command"; command = "$obsidianExe log-prompt" }
             )
         }
     )
@@ -119,7 +109,7 @@ $hooksConfig = @{
         @{
             matcher = "*"
             hooks = @(
-                @{ type = "command"; command = (Get-HookCommand "notify_notification.ps1") }
+                @{ type = "command"; command = "$notifyExe --message `"Needs your attention!`"" }
             )
         }
     )
@@ -161,8 +151,14 @@ $json = $formatted -join "`n"
 [System.IO.File]::WriteAllText($settingsPath, $json, $utf8)
 Write-Host "[OK] Updated settings.json with hooks config" -ForegroundColor Green
 
-# 8. Install Obsidian CSS snippet
-$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+# 8. Clean up old claude-hooks.exe if present
+$oldExe = Join-Path $hooksDir "claude-hooks.exe"
+if (Test-Path $oldExe) {
+    Remove-Item $oldExe -Force
+    Write-Host "[OK] Removed old claude-hooks.exe" -ForegroundColor Green
+}
+
+# 9. Install Obsidian CSS snippet
 $cssSource = Join-Path $repoRoot "claude-sessions.css"
 if (Test-Path $cssSource) {
     # Walk up from vault path to find .obsidian/snippets/
