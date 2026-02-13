@@ -3,14 +3,14 @@
 Portable hooks for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) on Windows that provide:
 
 - **Obsidian logging** — every prompt and response is logged to Obsidian as a nicely-formatted session note with frontmatter, callouts, and a daily index
-- **Windows notifications** — balloon notifications when Claude finishes a task or needs your attention, plus a sound on questions
+- **Windows notifications** — balloon notifications when Claude finishes a task or needs your attention
 
 ## Prerequisites
 
 - Windows 10/11
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
 - PowerShell 5.1+
-- [Obsidian](https://obsidian.md/) (optional but recommended for the logging hooks)
+- [Obsidian](https://obsidian.md/) (for the logging hooks)
 
 ## Quick install
 
@@ -22,21 +22,25 @@ cd claude-hooks
 
 The installer will:
 
-1. Ask for your Obsidian vault path (or accept the default)
-2. Set the `CLAUDE_VAULT` environment variable
+1. Ask for your Obsidian vault path (the folder where session logs will be written)
+2. Set the `CLAUDE_VAULT` environment variable (user-level, persistent)
 3. Copy hook scripts to `~/.claude/hooks/`
-4. Merge hooks config into `~/.claude/settings.json` (existing settings like `model`, `env`, `enabledPlugins` are preserved)
+4. Copy skills to `~/.claude/skills/`
+5. Install `claude-sessions.css` to your Obsidian vault's snippets folder
+6. Merge hooks config into `~/.claude/settings.json` (existing settings are preserved)
 
 ## Manual install
 
 If you prefer not to run the installer:
 
 1. Copy the `hooks\` folder to `%USERPROFILE%\.claude\hooks\`
-2. Set the `CLAUDE_VAULT` user environment variable to your Obsidian vault path:
+2. Copy the `skills\` folder to `%USERPROFILE%\.claude\skills\`
+3. Copy `claude-sessions.css` to your vault's `.obsidian\snippets\` folder
+4. Set the `CLAUDE_VAULT` user environment variable to your Obsidian vault path:
    ```powershell
-   [Environment]::SetEnvironmentVariable("CLAUDE_VAULT", "C:\path\to\your\vault", "User")
+   [Environment]::SetEnvironmentVariable("CLAUDE_VAULT", "C:\path\to\your\vault\Claude", "User")
    ```
-3. Add the hooks config to `~/.claude/settings.json` — see `install.ps1` for the exact structure. All hook commands follow this pattern:
+5. Add the hooks config to `~/.claude/settings.json` — see `install.ps1` for the exact structure. All hook commands follow this pattern:
    ```
    powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\Users\<you>\.claude\hooks\<script>.ps1
    ```
@@ -45,7 +49,7 @@ If you prefer not to run the installer:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `CLAUDE_VAULT` | Path to the Obsidian folder where session logs are written | `C:\Obsidian\Personal\Work\Claude` |
+| `CLAUDE_VAULT` | Path to the Obsidian folder where session logs are written | *(set by installer)* |
 
 Set it permanently:
 ```powershell
@@ -54,32 +58,38 @@ Set it permanently:
 
 ## What each hook does
 
+### Active hooks (wired up by the installer)
+
 | Script | Hook event | Description |
 |--------|-----------|-------------|
 | `log_prompt.ps1` | UserPromptSubmit | Logs each user prompt to an Obsidian session note with frontmatter, project folders, and resumed-session linking |
 | `log_response.ps1` | Stop | Extracts the last assistant response from the transcript and appends it to the session note; updates duration and daily index |
-| `notify_stop.ps1` | Stop | Plays a sound and shows a Windows balloon notification when Claude finishes |
-| `notify_notification.ps1` | Notification | Plays a sound and shows a balloon when Claude needs attention |
-| `notify_done.ps1` | (spare) | Minimal balloon notification for task completion |
-| `notify_question.ps1` | (spare) | Plays a system sound |
+| `notify_stop.ps1` | Stop | Plays a sound and shows a Windows balloon notification when Claude finishes a task |
+| `notify_notification.ps1` | Notification | Plays a sound and shows a balloon when Claude needs your attention |
+
+### Spare hooks (included but not wired up)
+
+| Script | Description |
+|--------|-------------|
+| `notify_done.ps1` | Minimal balloon notification (no sound) |
+| `notify_question.ps1` | Plays a system sound only (no balloon) |
+
+You can wire these up yourself by adding them to your `~/.claude/settings.json` hooks config.
+
+## Skills
+
+The installer copies Claude Code skills to `~/.claude/skills/`. These are available as slash commands in any Claude Code session.
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| synopsis | `/synopsis` | Generates a retrospective of your Claude Code sessions from the Obsidian logs and writes it to the vault. Supports arguments: `/synopsis`, `/synopsis 2026-02-12`, `/synopsis week` |
 
 ## Obsidian CSS snippet
 
-`claude-sessions.css` styles the custom callouts (`[!user]`, `[!claude]`, `[!plan]`) used in the session notes. To install:
+`claude-sessions.css` styles the custom callouts (`[!user]`, `[!claude]`, `[!plan]`) used in the session notes.
 
-1. Copy `claude-sessions.css` to your vault's `.obsidian/snippets/` folder
-2. In Obsidian, go to **Settings > Appearance > CSS snippets** and enable `claude-sessions`
+The installer copies this to your vault automatically. To enable it in Obsidian:
 
-The installer does this automatically if you provide your vault path.
+**Settings > Appearance > CSS snippets** > enable **claude-sessions**
 
-## Plugins
-
-These Claude Code plugins complement the hooks. Install via the Claude Code plugin manager:
-
-```
-superpowers@superpowers-marketplace
-beads@beads-marketplace
-context7-plugin@context7-marketplace
-claude-md-management@claude-plugins-official
-claude-code-setup@claude-plugins-official
-```
+If you installed manually, copy `claude-sessions.css` to your vault's `.obsidian/snippets/` folder.

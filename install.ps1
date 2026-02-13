@@ -6,6 +6,7 @@
     - Prompts for the Obsidian vault path
     - Sets CLAUDE_VAULT as a user-level environment variable
     - Copies hook scripts to ~/.claude/hooks/
+    - Copies skills to ~/.claude/skills/
     - Merges hooks config into ~/.claude/settings.json (preserving existing settings)
 #>
 
@@ -19,10 +20,12 @@ Write-Host "`n=== Claude Code Hooks Installer ===" -ForegroundColor Cyan
 Write-Host ""
 
 # 1. Prompt for Obsidian vault path
-$defaultVault = "C:\Obsidian\Personal\Work\Claude"
 if (-not $VaultPath) {
-    $VaultPath = Read-Host "Obsidian vault path for Claude logs (default: $defaultVault)"
-    if (-not $VaultPath) { $VaultPath = $defaultVault }
+    $VaultPath = Read-Host "Obsidian vault path for Claude logs (e.g. C:\Obsidian\MyVault\Claude)"
+    if (-not $VaultPath) {
+        Write-Host "[ERROR] Vault path is required. Pass it as -VaultPath or enter it at the prompt." -ForegroundColor Red
+        exit 1
+    }
 }
 
 # Normalize path (remove trailing slash)
@@ -69,7 +72,25 @@ foreach ($script in $scripts) {
     }
 }
 
-# 5. Build hooks config with absolute paths for this machine
+# 5. Copy skills from repo's skills/ folder
+$repoSkillsDir = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "skills"
+$skillsDir = Join-Path $claudeDir "skills"
+if (Test-Path $repoSkillsDir) {
+    $skillFolders = Get-ChildItem -Path $repoSkillsDir -Directory
+    foreach ($folder in $skillFolders) {
+        $destFolder = Join-Path $skillsDir $folder.Name
+        if (-not (Test-Path $destFolder)) {
+            New-Item -ItemType Directory -Path $destFolder -Force | Out-Null
+        }
+        $skillFiles = Get-ChildItem -Path $folder.FullName -File
+        foreach ($file in $skillFiles) {
+            Copy-Item -Path $file.FullName -Destination (Join-Path $destFolder $file.Name) -Force
+        }
+        Write-Host "[OK] Installed skill: $($folder.Name)" -ForegroundColor Green
+    }
+}
+
+# 6. Build hooks config with absolute paths for this machine
 $prefix = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File"
 
 function Get-HookCommand($scriptName) {
@@ -104,7 +125,7 @@ $hooksConfig = @{
     )
 }
 
-# 6. Merge into existing settings.json or create new one
+# 7. Merge into existing settings.json or create new one
 $settingsPath = Join-Path $claudeDir "settings.json"
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 
@@ -140,7 +161,7 @@ $json = $formatted -join "`n"
 [System.IO.File]::WriteAllText($settingsPath, $json, $utf8)
 Write-Host "[OK] Updated settings.json with hooks config" -ForegroundColor Green
 
-# 7. Install Obsidian CSS snippet
+# 8. Install Obsidian CSS snippet
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $cssSource = Join-Path $repoRoot "claude-sessions.css"
 if (Test-Path $cssSource) {
