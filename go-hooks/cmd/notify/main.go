@@ -11,6 +11,8 @@ func main() {
 		recover() // Never block Claude - swallow all panics
 	}()
 
+	beeep.AppName = "Claude Code"
+
 	title := "Claude"
 	message := "Task completed!"
 
