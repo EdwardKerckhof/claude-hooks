@@ -179,6 +179,16 @@ if (Test-Path $cssSource) {
     }
 }
 
+# 10. Optionally enable git auto-push for vault
+$gitPush = Read-Host "Enable git auto-push for vault? (y/n)"
+if ($gitPush -eq "y" -or $gitPush -eq "Y") {
+    [Environment]::SetEnvironmentVariable("CLAUDE_VAULT_GIT_PUSH", "1", "User")
+    $env:CLAUDE_VAULT_GIT_PUSH = "1"
+    Write-Host "[OK] Set CLAUDE_VAULT_GIT_PUSH = 1" -ForegroundColor Green
+    Write-Host "     Vault changes will be committed and pushed after each response." -ForegroundColor Gray
+    Write-Host "     Make sure your vault has a git remote configured." -ForegroundColor Gray
+}
+
 Write-Host "`n=== Installation complete ===" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Hooks installed to: $hooksDir" -ForegroundColor White
