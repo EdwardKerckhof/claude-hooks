@@ -19,18 +19,25 @@ func setConfigHome(t *testing.T, json string) {
 	t.Setenv("HOME", dir)        // os.UserHomeDir() reads this on Unix
 }
 
-func TestIsGitRepo(t *testing.T) {
-	// Directory with .git
+func TestFindGitRoot(t *testing.T) {
+	// Directory with .git — returns itself
 	dir := t.TempDir()
 	os.Mkdir(filepath.Join(dir, ".git"), 0755)
-	if !isGitRepo(dir) {
-		t.Error("expected true for directory with .git")
+	if got := findGitRoot(dir); got != filepath.Clean(dir) {
+		t.Errorf("expected %q, got %q", dir, got)
 	}
 
-	// Directory without .git
+	// Subdirectory — walks up to parent with .git
+	sub := filepath.Join(dir, "sub", "deep")
+	os.MkdirAll(sub, 0755)
+	if got := findGitRoot(sub); got != filepath.Clean(dir) {
+		t.Errorf("expected %q, got %q", dir, got)
+	}
+
+	// Directory without .git anywhere — returns ""
 	dir2 := t.TempDir()
-	if isGitRepo(dir2) {
-		t.Error("expected false for directory without .git")
+	if got := findGitRoot(dir2); got != "" {
+		t.Errorf("expected empty, got %q", got)
 	}
 }
 
@@ -88,6 +95,39 @@ func TestSyncIfEnabled_CommitsAndPushes(t *testing.T) {
 	SyncIfEnabled(clone)
 
 	// Verify commit exists in clone
+	cmd := exec.Command("git", "-C", clone, "log", "--oneline", "-1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git log failed: %v\n%s", err, out)
+	}
+	if got := string(out); !contains(got, "claude: sync session") {
+		t.Errorf("expected commit message containing 'claude: sync session', got: %s", got)
+	}
+
+	// Verify pushed to bare
+	cmd = exec.Command("git", "-C", bare, "log", "--oneline", "-1")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git log on bare failed: %v\n%s", err, out)
+	}
+	if got := string(out); !contains(got, "claude: sync session") {
+		t.Errorf("expected pushed commit in bare, got: %s", got)
+	}
+}
+
+func TestSyncIfEnabled_FromSubdirectory(t *testing.T) {
+	setConfigHome(t, `{"git_auto_push": true}`)
+	bare, clone := initBareAndClone(t)
+
+	// Create a subdirectory (like CLAUDE_VAULT pointing to a subfolder)
+	sub := filepath.Join(clone, "Claude")
+	os.MkdirAll(sub, 0755)
+	os.WriteFile(filepath.Join(sub, "session.md"), []byte("# Session"), 0644)
+
+	// Pass the subdirectory — should walk up and find the git root
+	SyncIfEnabled(sub)
+
+	// Verify commit exists
 	cmd := exec.Command("git", "-C", clone, "log", "--oneline", "-1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {

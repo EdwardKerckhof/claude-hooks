@@ -21,11 +21,12 @@ func SyncIfEnabled(vaultDir string) {
 	if !cfg.GitAutoPush {
 		return
 	}
-	if !isGitRepo(vaultDir) {
+	gitRoot := findGitRoot(vaultDir)
+	if gitRoot == "" {
 		return
 	}
 
-	lockPath := filepath.Join(vaultDir, ".git", "claude-sync.lock")
+	lockPath := filepath.Join(gitRoot, ".git", "claude-sync.lock")
 	if !acquireLock(lockPath) {
 		return
 	}
@@ -34,29 +35,41 @@ func SyncIfEnabled(vaultDir string) {
 	ctx, cancel := context.WithTimeout(context.Background(), syncTimeout)
 	defer cancel()
 
-	// Stage all changes
-	if err := gitCmd(ctx, vaultDir, "add", "-A"); err != nil {
+	// Stage all changes (use gitRoot so git sees the full repo)
+	if err := gitCmd(ctx, gitRoot, "add", "-A"); err != nil {
 		return
 	}
 
 	// Check if anything staged
-	if err := gitCmd(ctx, vaultDir, "diff", "--cached", "--quiet"); err == nil {
+	if err := gitCmd(ctx, gitRoot, "diff", "--cached", "--quiet"); err == nil {
 		return // exit 0 means nothing staged
 	}
 
 	// Commit
 	msg := fmt.Sprintf("claude: sync session %s", time.Now().Format("15:04"))
-	if err := gitCmd(ctx, vaultDir, "commit", "-m", msg); err != nil {
+	if err := gitCmd(ctx, gitRoot, "commit", "-m", msg); err != nil {
 		return
 	}
 
 	// Push (best-effort)
-	_ = gitCmd(ctx, vaultDir, "push")
+	_ = gitCmd(ctx, gitRoot, "push")
 }
 
-func isGitRepo(dir string) bool {
-	info, err := os.Stat(filepath.Join(dir, ".git"))
-	return err == nil && info.IsDir()
+// findGitRoot walks up from dir looking for a .git directory.
+// Returns the git root path, or "" if not found.
+func findGitRoot(dir string) string {
+	dir = filepath.Clean(dir)
+	for {
+		info, err := os.Stat(filepath.Join(dir, ".git"))
+		if err == nil && info.IsDir() {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
 
 func acquireLock(path string) bool {

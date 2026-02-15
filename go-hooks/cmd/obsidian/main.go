@@ -182,7 +182,7 @@ func runLogResponse() {
 		date := now.Format("2006-01-02")
 		obsidian.RebuildDailyIndex(vaultDir, date)
 
-		// Git sync (if enabled via CLAUDE_VAULT_GIT_PUSH)
+		// Git sync (if enabled via config.json)
 		gitsync.SyncIfEnabled(vaultDir)
 	}
 }
