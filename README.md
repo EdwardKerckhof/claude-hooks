@@ -13,7 +13,14 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin for Windo
 
 ## Install (Plugin — Recommended)
 
-Install the plugin from the marketplace or add it as a custom plugin, then run the setup command:
+Add the marketplace and install the plugin:
+
+```
+/plugin marketplace add git@github.com:EdwardKerckhof/claude-hooks.git
+/plugin install claude-hooks@claude-hooks-marketplace
+```
+
+Then run the setup command:
 
 ```
 /setup-obsidian-hooks
