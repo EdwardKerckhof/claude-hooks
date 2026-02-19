@@ -1,8 +1,12 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs Claude Code hooks for Obsidian logging and Windows notifications.
+    [DEPRECATED] Installs Claude Code hooks for Obsidian logging and Windows notifications.
 .DESCRIPTION
+    This installer is deprecated. Please install claude-hooks as a Claude Code plugin instead.
+    See README.md for plugin installation instructions, then run /setup-obsidian-hooks.
+
+    Legacy behavior (still works):
     - Prompts for the Obsidian vault path
     - Sets CLAUDE_VAULT as a user-level environment variable
     - Copies pre-built Go binaries (claude-notify.exe, claude-obsidian.exe) to ~/.claude/hooks/
@@ -18,13 +22,27 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "`n=== Claude Code Hooks Installer ===" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "[DEPRECATED] This installer is deprecated." -ForegroundColor Yellow
+Write-Host "             Install claude-hooks as a Claude Code plugin instead." -ForegroundColor Yellow
+Write-Host "             See README.md for plugin installation instructions." -ForegroundColor Yellow
+Write-Host "             After installing the plugin, run /setup-obsidian-hooks" -ForegroundColor Yellow
+Write-Host ""
 
 # 1. Prompt for Obsidian vault path
 if (-not $VaultPath) {
-    $VaultPath = Read-Host "Obsidian vault path for Claude logs (e.g. C:\Obsidian\MyVault\Claude)"
-    if (-not $VaultPath) {
-        Write-Host "[ERROR] Vault path is required. Pass it as -VaultPath or enter it at the prompt." -ForegroundColor Red
-        exit 1
+    if ($env:CLAUDE_VAULT) {
+        $change = Read-Host "Vault path is '$env:CLAUDE_VAULT'. Press Enter to keep, or type a new path"
+        if ($change) {
+            $VaultPath = $change
+        } else {
+            $VaultPath = $env:CLAUDE_VAULT
+        }
+    } else {
+        $VaultPath = Read-Host "Obsidian vault path for Claude logs (e.g. C:\Obsidian\MyVault\Claude)"
+        if (-not $VaultPath) {
+            Write-Host "[ERROR] Vault path is required. Pass it as -VaultPath or enter it at the prompt." -ForegroundColor Red
+            exit 1
+        }
     }
 }
 
@@ -85,8 +103,9 @@ if (Test-Path $repoSkillsDir) {
 }
 
 # 6. Build hooks config with absolute paths for this machine
-$notifyExe = Join-Path $hooksDir "claude-notify.exe"
-$obsidianExe = Join-Path $hooksDir "claude-obsidian.exe"
+# Use forward slashes so paths work in both PowerShell and bash (MSYS/Git Bash)
+$notifyExe = (Join-Path $hooksDir "claude-notify.exe") -replace '\\', '/'
+$obsidianExe = (Join-Path $hooksDir "claude-obsidian.exe") -replace '\\', '/'
 
 $hooksConfig = @{
     "Stop" = @(
@@ -177,6 +196,63 @@ if (Test-Path $cssSource) {
     } else {
         Write-Host "[SKIP] Could not find .obsidian folder - copy claude-sessions.css manually" -ForegroundColor Yellow
     }
+}
+
+# 10. Configure hooks via config.json
+$configPath = Join-Path $hooksDir "config.json"
+$hooksCfg = @{ skip_when_focused = $true; git_auto_push = $false }
+
+if (Test-Path $configPath) {
+    try {
+        $existing = Get-Content $configPath -Raw | ConvertFrom-Json
+        if ($null -ne $existing.skip_when_focused) { $hooksCfg.skip_when_focused = [bool]$existing.skip_when_focused }
+        if ($null -ne $existing.git_auto_push) { $hooksCfg.git_auto_push = [bool]$existing.git_auto_push }
+        Write-Host "[OK] Read existing config.json" -ForegroundColor Green
+    } catch {
+        Write-Host "[WARN] Could not parse config.json, using defaults" -ForegroundColor Yellow
+    }
+}
+
+# Prompt for skip_when_focused
+if ($hooksCfg.skip_when_focused) {
+    $change = Read-Host "Skip notifications when terminal is focused (currently: yes). Press Enter to keep, or type 'n' to disable"
+    if ($change -eq "n" -or $change -eq "N") {
+        $hooksCfg.skip_when_focused = $false
+    }
+} else {
+    $change = Read-Host "Skip notifications when terminal is focused? (y/n, currently: no)"
+    if ($change -eq "y" -or $change -eq "Y") {
+        $hooksCfg.skip_when_focused = $true
+    }
+}
+
+# Prompt for git_auto_push
+if ($hooksCfg.git_auto_push) {
+    $change = Read-Host "Git auto-push is enabled. Press Enter to keep, or type 'n' to disable"
+    if ($change -eq "n" -or $change -eq "N") {
+        $hooksCfg.git_auto_push = $false
+        Write-Host "[OK] Disabled git auto-push" -ForegroundColor Green
+    }
+} else {
+    $gitPush = Read-Host "Enable git auto-push for vault? (y/n)"
+    if ($gitPush -eq "y" -or $gitPush -eq "Y") {
+        $hooksCfg.git_auto_push = $true
+        Write-Host "[OK] Enabled git auto-push" -ForegroundColor Green
+        Write-Host "     Vault changes will be committed and pushed after each response." -ForegroundColor Gray
+        Write-Host "     Make sure your vault has a git remote configured." -ForegroundColor Gray
+    }
+}
+
+# Write config.json
+$cfgJson = $hooksCfg | ConvertTo-Json
+[System.IO.File]::WriteAllText($configPath, $cfgJson, $utf8)
+Write-Host "[OK] Updated config.json" -ForegroundColor Green
+
+# Migrate: remove legacy CLAUDE_VAULT_GIT_PUSH env var if present
+if ($env:CLAUDE_VAULT_GIT_PUSH) {
+    [Environment]::SetEnvironmentVariable("CLAUDE_VAULT_GIT_PUSH", $null, "User")
+    Remove-Item Env:\CLAUDE_VAULT_GIT_PUSH -ErrorAction SilentlyContinue
+    Write-Host "[OK] Removed legacy CLAUDE_VAULT_GIT_PUSH env var (migrated to config.json)" -ForegroundColor Green
 }
 
 Write-Host "`n=== Installation complete ===" -ForegroundColor Cyan
