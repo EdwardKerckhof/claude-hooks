@@ -1,8 +1,12 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs Claude Code hooks for Obsidian logging and Windows notifications.
+    [DEPRECATED] Installs Claude Code hooks for Obsidian logging and Windows notifications.
 .DESCRIPTION
+    This installer is deprecated. Please install claude-hooks as a Claude Code plugin instead.
+    See README.md for plugin installation instructions, then run /setup-obsidian-hooks.
+
+    Legacy behavior (still works):
     - Prompts for the Obsidian vault path
     - Sets CLAUDE_VAULT as a user-level environment variable
     - Copies pre-built Go binaries (claude-notify.exe, claude-obsidian.exe) to ~/.claude/hooks/
@@ -17,6 +21,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 Write-Host "`n=== Claude Code Hooks Installer ===" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "[DEPRECATED] This installer is deprecated." -ForegroundColor Yellow
+Write-Host "             Install claude-hooks as a Claude Code plugin instead." -ForegroundColor Yellow
+Write-Host "             See README.md for plugin installation instructions." -ForegroundColor Yellow
+Write-Host "             After installing the plugin, run /setup-obsidian-hooks" -ForegroundColor Yellow
 Write-Host ""
 
 # 1. Prompt for Obsidian vault path
