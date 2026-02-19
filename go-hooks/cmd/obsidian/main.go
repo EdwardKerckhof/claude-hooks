@@ -145,8 +145,19 @@ func runLogResponse() {
 		return
 	}
 
-	// Read transcript and find last assistant text + planContent
-	responseText, planText := readTranscript(input.TranscriptPath)
+	// Read transcript and find last assistant text + planContent.
+	// Retry up to 3 times with 500ms delay to handle the race where the Stop
+	// hook fires before the transcript is fully flushed to disk.
+	var responseText, planText string
+	for attempt := 0; attempt < 3; attempt++ {
+		responseText, planText = readTranscript(input.TranscriptPath)
+		if responseText != "" || planText != "" {
+			break
+		}
+		if attempt < 2 {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
 
 	now := time.Now()
 	timeStr := now.Format("15:04:05")
@@ -217,8 +228,8 @@ func readTranscript(path string) (responseText, planText string) {
 		lines = append(lines, scanner.Text())
 	}
 
-	// Walk backwards, up to 50 lines
-	maxLook := 50
+	// Walk backwards, up to 200 lines
+	maxLook := 200
 	if maxLook > len(lines) {
 		maxLook = len(lines)
 	}
